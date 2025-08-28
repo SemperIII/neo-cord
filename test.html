@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NeoCord Test</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .user { margin: 10px; padding: 10px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <h1>NeoCord Test Page</h1>
+    <div id="users"></div>
+    
+    <script>
+        fetch('/api/users')
+            .then(r => r.json())
+            .then(users => {
+                const div = document.getElementById('users');
+                users.forEach(user => {
+                    div.innerHTML += `
+                        <div class="user">
+                            <strong>${user.username}</strong>
+                            <br><img src="${user.avatar}" width="50">
+                        </div>
+                    `;
+                });
+            });
+    </script>
+</body>
+</html>
