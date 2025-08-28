@@ -19,6 +19,15 @@ const dbPath = path.join(__dirname, 'neocord.db');
 const db = new sqlite3.Database(dbPath);
 
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Добавьте fallback для Render
+app.use((req, res, next) => {
+    if (req.url === '/') {
+        res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    } else {
+        next();
+    }
+});
 app.use(express.json());
 
 // Маршрут для главной страницы
