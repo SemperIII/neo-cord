@@ -161,6 +161,7 @@ app.get('/api/online-users', (req, res) => {
 // WebSocket соединения
 const activeUsers = new Map();
 const voiceUsers = new Map();
+const speakingUsers = new Map(); // Новый Map для говорящих пользователей
 
 // Функция для обновления списка онлайн пользователей
 function updateOnlineUsers() {
@@ -188,8 +189,32 @@ function updateVoiceUsers(roomId) {
     io.to(roomId).emit('voice-users-update', voiceUsersList);
 }
 
+// Функция для обновления говорящих пользователей
+function updateSpeakingUsers(roomId) {
+    const speakingUsersList = Array.from(speakingUsers.values())
+        .filter(user => user.roomId === roomId)
+        .map(user => ({
+            id: user.userId,
+            username: user.username,
+            avatar: user.avatar
+        }));
+    
+    io.to(roomId).emit('speaking-users-update', speakingUsersList);
+}
+
 io.on('connection', (socket) => {
     console.log('🔗 Новое подключение:', socket.id);
+
+    socket.on('peer-id', (data) => {
+        const user = activeUsers.get(socket.id);
+        if (user && socket.roomId) {
+            // Отправляем всем в комнате peer-id этого пользователя
+            socket.to(socket.roomId).emit('user-peer-id', {
+                userId: user.userId,
+                peerId: data.peerId
+            });
+        }
+    });
 
     // Аутентификация пользователя
     socket.on('authenticate', (userData) => {
@@ -325,12 +350,43 @@ io.on('connection', (socket) => {
         console.log(`🎤 ${user.username} выходит из голосового чата`);
 
         voiceUsers.delete(socket.id);
+        speakingUsers.delete(socket.id); // Удаляем из говорящих
 
         // Уведомляем других в комнате
         socket.to(socket.roomId).emit('user-left-voice', user.username);
 
-        // Обновляем список пользователей в голосовом чате
+        // Обновляем списки пользователей
         updateVoiceUsers(socket.roomId);
+        updateSpeakingUsers(socket.roomId);
+    });
+
+    // Начало речи
+    socket.on('start-speaking', () => {
+        const user = activeUsers.get(socket.id);
+        if (!user || !socket.roomId) return;
+
+        console.log(`🎤 ${user.username} начал говорить`);
+
+        speakingUsers.set(socket.id, {
+            userId: user.userId,
+            username: user.username,
+            avatar: user.avatar,
+            roomId: socket.roomId,
+            socketId: socket.id
+        });
+
+        updateSpeakingUsers(socket.roomId);
+    });
+
+    // Окончание речи
+    socket.on('stop-speaking', () => {
+        const user = activeUsers.get(socket.id);
+        if (!user || !socket.roomId) return;
+
+        console.log(`🎤 ${user.username} перестал говорить`);
+
+        speakingUsers.delete(socket.id);
+        updateSpeakingUsers(socket.roomId);
     });
 
     // WebRTC сигналы
@@ -394,6 +450,14 @@ io.on('connection', (socket) => {
         if (user) {
             console.log('❌ Пользователь отключился:', user.username);
             
+            // Удаляем из говорящих если был
+            if (speakingUsers.has(socket.id)) {
+                speakingUsers.delete(socket.id);
+                if (socket.roomId) {
+                    updateSpeakingUsers(socket.roomId);
+                }
+            }
+            
             // Выходим из голосового чата если был
             if (voiceUsers.has(socket.id)) {
                 voiceUsers.delete(socket.id);
@@ -431,6 +495,7 @@ server.listen(PORT, () => {
     console.log(`📍 Port: ${PORT}`);
     console.log(`🌐 URL: http://localhost:${PORT}`);
     console.log('✅ Голосовой чат активирован');
+    console.log('✅ Детектор голосовой активности');
     console.log('✅ Отображение онлайн пользователей');
     console.log('===================================');
 });
