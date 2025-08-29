@@ -552,3 +552,670 @@ body {
         transform: translateX(0);
     }
 }
+
+/* Стили для говорящих пользователей */
+.voice-user-status.speaking {
+    color: #eb459e !important;
+    font-weight: bold;
+    animation: pulse 1.5s infinite;
+}
+
+/* Индикатор активности микрофона */
+.microphone-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #eb459e;
+    display: inline-block;
+    margin-left: 8px;
+    animation: pulse 1.5s infinite;
+}
+
+/* Анимация пульсации для индикаторов */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* Статус пользователя в голосовом чате */
+.user-status-voice {
+    background: #eb459e;
+    animation: pulse 1.5s infinite;
+}
+
+/* Адаптивность для мобильных */
+@media (max-width: 768px) {
+    .voice-chat-sidebar {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 80%;
+        z-index: 1000;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+    }
+    
+    .voice-chat-sidebar.active {
+        transform: translateX(0);
+    }
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --primary: #7289da;
+    --background: #36393f;
+    --sidebar: #2f3136;
+    --text: #dcddde;
+    --success: #43b581;
+    --error: #f04747;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background: var(--background);
+    color: var(--text);
+    height: 100vh;
+}
+
+.container {
+    display: flex;
+    height: 100vh;
+}
+
+/* Экран аутентификации */
+.auth-screen {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, var(--primary) 0%, #424549 100%);
+}
+
+.auth-form {
+    background: var(--sidebar);
+    padding: 30px;
+    border-radius: 10px;
+    width: 400px;
+    text-align: center;
+}
+
+.app-logo i {
+    font-size: 50px;
+    color: white;
+    margin-bottom: 10px;
+}
+
+.app-logo h1 {
+    color: white;
+    margin-bottom: 5px;
+}
+
+.app-logo p {
+    color: #b9bbbe;
+    margin-bottom: 20px;
+}
+
+.tabs {
+    display: flex;
+    margin-bottom: 20px;
+}
+
+.tab {
+    flex: 1;
+    padding: 10px;
+    background: none;
+    border: none;
+    color: #b9bbbe;
+    cursor: pointer;
+}
+
+.tab.active {
+    color: white;
+    border-bottom: 2px solid var(--primary);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.input-group {
+    margin: 10px 0;
+    position: relative;
+}
+
+.input-group i {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #72767d;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 12px 15px 12px 40px;
+    border: none;
+    border-radius: 5px;
+    background: #40444b;
+    color: white;
+}
+
+.btn-primary {
+    width: 100%;
+    padding: 12px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.btn-primary:hover {
+    background: #677bc4;
+}
+
+.message {
+    margin-top: 15px;
+    padding: 10px;
+    border-radius: 5px;
+    text-align: center;
+}
+
+.message.success {
+    background: var(--success);
+}
+
+.message.error {
+    background: var(--error);
+}
+
+.loading {
+    text-align: center;
+    color: #b9bbbe;
+    padding: 20px;
+}
+
+.loading i {
+    font-size: 24px;
+    margin-bottom: 10px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Основной интерфейс */
+.chat-screen {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    display: none;
+}
+
+.sidebar {
+    width: 250px;
+    background: var(--sidebar);
+    padding: 20px;
+}
+
+.user-info {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.user-avatar img {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 3px solid var(--primary);
+}
+
+.status {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--success);
+    display: inline-block;
+    margin-top: 5px;
+}
+
+.btn-logout {
+    width: 100%;
+    padding: 8px;
+    background: var(--error);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.rooms-section {
+    margin-bottom: 20px;
+}
+
+.rooms-section h4 {
+    color: #b9bbbe;
+    margin-bottom: 10px;
+}
+
+.room-list {
+    list-style: none;
+}
+
+.room-item {
+    padding: 8px;
+    cursor: pointer;
+    color: #8e9297;
+}
+
+.room-item:hover {
+    background: #40444b;
+    color: white;
+}
+
+.room-item.active {
+    background: var(--primary);
+    color: white;
+}
+
+.chat-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.room-header {
+    padding: 20px;
+    background: var(--sidebar);
+    border-bottom: 1px solid #40444b;
+}
+
+.room-header h2 {
+    color: white;
+}
+
+.messages {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.welcome-message {
+    text-align: center;
+    color: #72767d;
+    margin-top: 50px;
+}
+
+.welcome-message i {
+    font-size: 50px;
+    margin-bottom: 10px;
+}
+
+.message-item {
+    margin-bottom: 15px;
+    padding: 10px;
+    background: #40444b;
+    border-radius: 5px;
+}
+
+.message-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.message-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    margin-right: 10px;
+}
+
+.message-user {
+    font-weight: bold;
+    color: var(--primary);
+}
+
+.message-time {
+    color: #72767d;
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+.message-text {
+    color: var(--text);
+    line-height: 1.4;
+}
+
+.typing-indicator {
+    padding: 10px 20px;
+    color: #72767d;
+    font-style: italic;
+    min-height: 20px;
+}
+
+.message-input-container {
+    padding: 20px;
+    background: var(--sidebar);
+}
+
+.message-input {
+    display: flex;
+}
+
+.message-input input {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 5px;
+    background: #40444b;
+    color: white;
+}
+
+.btn-send {
+    padding: 12px 20px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+/* Уведомления */
+.notifications {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.notification {
+    background: var(--sidebar);
+    color: white;
+    padding: 15px 20px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    border-left: 4px solid var(--primary);
+}
+
+.notification.success {
+    border-left-color: var(--success);
+}
+
+.notification.error {
+    border-left-color: var(--error);
+}
+
+/* Голосовой чат */
+.voice-chat-sidebar {
+    width: 300px;
+    background: var(--sidebar);
+    border-left: 1px solid #40444b;
+    display: none;
+    flex-direction: column;
+}
+
+.voice-header {
+    padding: 20px;
+    border-bottom: 1px solid #40444b;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.voice-header h3 {
+    color: white;
+    font-size: 16px;
+}
+
+.voice-header h3 i {
+    margin-right: 8px;
+    color: #eb459e;
+}
+
+.btn-close-voice {
+    background: none;
+    border: none;
+    color: #72767d;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.btn-close-voice:hover {
+    color: var(--error);
+}
+
+.voice-users {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.voice-user-item {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    margin: 10px 0;
+    background: #40444b;
+    border-radius: 8px;
+    border-left: 3px solid #eb459e;
+}
+
+.voice-user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    margin-right: 12px;
+    border: 2px solid #eb459e;
+}
+
+.voice-user-info {
+    flex: 1;
+}
+
+.voice-user-name {
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.voice-user-status {
+    color: #eb459e;
+    font-size: 12px;
+}
+
+.no-users {
+    text-align: center;
+    color: #72767d;
+    margin-top: 50px;
+}
+
+.no-users i {
+    font-size: 48px;
+    margin-bottom: 15px;
+}
+
+/* Статусы пользователей */
+.user-online-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-left: 10px;
+}
+
+.user-online-status.online {
+    background: var(--success);
+}
+
+.user-online-status.offline {
+    background: var(--error);
+}
+
+.user-online-status.voice {
+    background: #eb459e;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* Кнопки голосового чата */
+.btn-voice {
+    padding: 8px 16px;
+    background: #eb459e;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-voice:hover {
+    background: #d42d8b;
+}
+
+.btn-voice.leave {
+    background: var(--error);
+}
+
+.btn-voice.leave:hover {
+    background: #da373c;
+}
+
+.btn-voice.debug {
+    background: #ff9900;
+}
+
+.btn-voice.debug:hover {
+    background: #e68a00;
+}
+
+/* Стили для удаленного аудио */
+.remote-audio {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+/* Индикаторы статуса */
+.user-online-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-left: 10px;
+    display: inline-block;
+}
+
+.user-online-status.online {
+    background: var(--success);
+}
+
+.user-online-status.offline {
+    background: var(--error);
+}
+
+.user-online-status.voice {
+    background: #eb459e;
+    animation: pulse 1.5s infinite;
+}
+
+/* Стили для говорящих пользователей */
+.voice-user-status.speaking {
+    color: #eb459e !important;
+    font-weight: bold;
+    animation: pulse 1.5s infinite;
+}
+
+/* Индикатор активности микрофона */
+.microphone-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #eb459e;
+    display: inline-block;
+    margin-left: 8px;
+    animation: pulse 1.5s infinite;
+}
+
+/* Статус пользователя в голосовом чате */
+.user-status-voice {
+    background: #eb459e;
+    animation: pulse 1.5s infinite;
+}
+
+/* Адаптивность для мобильных */
+@media (max-width: 768px) {
+    .voice-chat-sidebar {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 80%;
+        z-index: 1000;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+    }
+    
+    .voice-chat-sidebar.active {
+        transform: translateX(0);
+    }
+    
+    .room-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .btn-voice {
+        width: 100%;
+        margin-bottom: 5px;
+    }
+}
+
+/* Список онлайн пользователей */
+.online-users-section {
+    margin-top: 20px;
+}
+
+.user-online-item {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    margin: 5px 0;
+    background: #40444b;
+    border-radius: 5px;
+}
+
+.user-online-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    margin-right: 10px;
+}
+
+.user-online-name {
+    font-size: 14px;
+    flex: 1;
+}

@@ -1,9 +1,218 @@
 const socket = io();
+
+// PeerJS для WebRTC
+let peer = null;
+const peers = {};
+
+// Настройки детектора голосовой активности
+let audioContext = null;
+let analyser = null;
+let microphone = null;
+let speaking = false;
+let voiceActivityDetectionInterval = null;
+const SPEAKING_THRESHOLD = 0.15; // Увеличили порог
+const SILENCE_DURATION = 300; // Миллисекунды тишины перед отключением
+let silenceTimer = null;
+
+// Режим отладки голосовой активности
+window.DEBUG_VOICE = false;
+
+// Инициализация PeerJS
+function initPeer() {
+    peer = new Peer({
+        host: '0.peerjs.com',
+        port: 443,
+        path: '/',
+        secure: true,
+        debug: 3
+    });
+
+    peer.on('open', (id) => {
+        console.log('✅ PeerJS подключен. ID:', id);
+        socket.emit('peer-id', { peerId: id });
+    });
+
+    peer.on('connection', (conn) => {
+        console.log('🔗 Peer подключение от:', conn.peer);
+    });
+
+    peer.on('call', (call) => {
+        console.log('📞 Входящий звонок от:', call.peer);
+        
+        // Ответим на звонок с нашим потоком
+        if (localStream) {
+            call.answer(localStream);
+        }
+        
+        call.on('stream', (remoteStream) => {
+            console.log('🎧 Получен удаленный поток');
+            addAudioStream(remoteStream, call.peer);
+        });
+    });
+
+    peer.on('error', (err) => {
+        console.error('❌ PeerJS ошибка:', err);
+    });
+}
+
+// Добавление аудиопотока
+function addAudioStream(stream, peerId) {
+    const audio = document.createElement('audio');
+    audio.srcObject = stream;
+    audio.autoplay = true;
+    audio.className = 'remote-audio';
+    audio.id = `audio-${peerId}`;
+    document.body.appendChild(audio);
+}
+
+// Удаление аудиопотока
+function removeAudioStream(peerId) {
+    const audio = document.getElementById(`audio-${peerId}`);
+    if (audio) {
+        audio.remove();
+    }
+}
+
+// Звонок другому пользователю
+function callUser(peerId) {
+    if (!localStream || !peer) return;
+    
+    console.log('📞 Звонок пользователю:', peerId);
+    
+    const call = peer.call(peerId, localStream);
+    
+    call.on('stream', (remoteStream) => {
+        console.log('🎧 Получен удаленный поток от:', peerId);
+        addAudioStream(remoteStream, peerId);
+    });
+    
+    call.on('close', () => {
+        console.log('📞 Звонок завершен с:', peerId);
+        removeAudioStream(peerId);
+    });
+}
+
+// Детектор голосовой активности
+async function setupVoiceActivityDetection(stream) {
+    try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        microphone = audioContext.createMediaStreamSource(stream);
+        
+        microphone.connect(analyser);
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0.8;
+        
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
+        // Запускаем проверку голосовой активности
+        voiceActivityDetectionInterval = setInterval(() => {
+            analyser.getByteFrequencyData(dataArray);
+            
+            // Вычисляем среднюю громкость
+            let sum = 0;
+            let count = 0;
+            
+            // Анализируем только средние частоты (голосовые)
+            for (let i = 10; i < 100; i++) {
+                if (dataArray[i] > 0) {
+                    sum += dataArray[i];
+                    count++;
+                }
+            }
+            
+            const average = count > 0 ? sum / count / 256 : 0;
+            
+            // Отладочная информация
+            if (window.DEBUG_VOICE) {
+                console.log('Уровень звука:', average.toFixed(3), 'Порог:', SPEAKING_THRESHOLD);
+            }
+            
+            // Определяем, говорит ли пользователь
+            if (average > SPEAKING_THRESHOLD) {
+                if (!speaking) {
+                    speaking = true;
+                    socket.emit('start-speaking');
+                    console.log('🎤 Начало речи');
+                }
+                
+                // Сбрасываем таймер тишины
+                if (silenceTimer) {
+                    clearTimeout(silenceTimer);
+                    silenceTimer = null;
+                }
+                
+            } else if (speaking) {
+                // Запускаем таймер для подтверждения тишины
+                if (!silenceTimer) {
+                    silenceTimer = setTimeout(() => {
+                        speaking = false;
+                        socket.emit('stop-speaking');
+                        console.log('🎤 Окончание речи');
+                        silenceTimer = null;
+                    }, SILENCE_DURATION);
+                }
+            }
+            
+        }, 50);
+        
+    } catch (error) {
+        console.error('❌ Ошибка детектора голосовой активности:', error);
+    }
+}
+
+// Остановка детектора голосовой активности
+function stopVoiceActivityDetection() {
+    if (voiceActivityDetectionInterval) {
+        clearInterval(voiceActivityDetectionInterval);
+        voiceActivityDetectionInterval = null;
+    }
+    
+    if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+    }
+    
+    speaking = false;
+    analyser = null;
+    microphone = null;
+    
+    if (silenceTimer) {
+        clearTimeout(silenceTimer);
+        silenceTimer = null;
+    }
+}
+
 let currentUser = null;
 let currentRoom = null;
 let localStream = null;
-let peerConnections = new Map();
 let isInVoiceChat = false;
+
+// Режим отладки
+function toggleDebugMode() {
+    window.DEBUG_VOICE = !window.DEBUG_VOICE;
+    console.log('Режим отладки голосовой активности:', window.DEBUG_VOICE);
+    showNotification(`Режим отладки: ${window.DEBUG_VOICE ? 'ВКЛ' : 'ВЫКЛ'}`, 'info');
+}
+
+// Проверка доступности микрофона
+async function checkMicrophoneAvailability() {
+    try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+            return false;
+        }
+        
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioDevices = devices.filter(device => device.kind === 'audioinput');
+        
+        console.log('Доступные микрофоны:', audioDevices);
+        
+        return audioDevices.length > 0;
+    } catch (error) {
+        console.error('Ошибка проверки микрофонов:', error);
+        return false;
+    }
+}
 
 // Показываем вкладки
 function showTab(tabName) {
@@ -171,15 +380,10 @@ function updateOnlineUsersList(users) {
         const userItem = document.createElement('div');
         userItem.className = 'user-online-item';
         
-        // Проверяем, находится ли пользователь в голосовом чате
-        const isInVoice = Array.from(voiceUsers.values()).some(voiceUser => 
-            voiceUser.userId === user.id && voiceUser.roomId === currentRoom
-        );
-        
         userItem.innerHTML = `
             <img class="user-online-avatar" src="${user.avatar}" alt="${user.username}">
             <span class="user-online-name">${user.username}</span>
-            <span class="user-online-status ${isInVoice ? 'voice' : user.status}"></span>
+            <span class="user-online-status ${user.status}"></span>
         `;
         onlineList.appendChild(userItem);
     });
@@ -188,17 +392,50 @@ function updateOnlineUsersList(users) {
 // Голосовой чат - присоединение
 async function joinVoiceChat() {
     try {
-        // Запрашиваем доступ к микрофону
-        localStream = await navigator.mediaDevices.getUserMedia({ 
+        // Проверяем доступность микрофона
+        const hasMicrophone = await checkMicrophoneAvailability();
+        if (!hasMicrophone) {
+            throw new Error('Микрофон не найден');
+        }
+
+        // Запрашиваем доступ к микрофону с обработкой разных браузеров
+        const constraints = {
             audio: {
                 echoCancellation: true,
                 noiseSuppression: true,
-                sampleRate: 44100
+                sampleRate: 44100,
+                channelCount: 1
             },
             video: false
-        });
+        };
+
+        // Пробуем разные варианты настроек для совместимости
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (firstError) {
+            console.log('Попытка 1 не удалась, пробуем упрощенные настройки:', firstError);
+            
+            // Упрощенные настройки для проблемных браузеров
+            const simpleConstraints = {
+                audio: true,
+                video: false
+            };
+            
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia(simpleConstraints);
+            } catch (secondError) {
+                console.log('Попытка 2 не удалась:', secondError);
+                throw new Error('Не удалось получить доступ к микрофону. Проверьте разрешения браузера.');
+            }
+        }
         
         console.log('🎤 Доступ к микрофону получен');
+
+        // Инициализируем детектор голосовой активности
+        await setupVoiceActivityDetection(localStream);
+        
+        // Инициализируем PeerJS
+        initPeer();
         
         // Подключаемся к голосовому чату
         socket.emit('join-voice');
@@ -211,12 +448,20 @@ async function joinVoiceChat() {
         
         showNotification('🎤 Вы присоединились к голосовому чату', 'success');
         
-        // Инициализируем WebRTC соединения с другими пользователями
-        initializeVoiceConnections();
-        
     } catch (error) {
         console.error('❌ Ошибка доступа к микрофону:', error);
-        showNotification('Не удалось получить доступ к микрофону', 'error');
+        
+        let errorMessage = 'Не удалось получить доступ к микрофону';
+        
+        if (error.name === 'NotAllowedError') {
+            errorMessage = 'Доступ к микрофону запрещен. Разрешите доступ в настройках браузера.';
+        } else if (error.name === 'NotFoundError') {
+            errorMessage = 'Микрофон не найден. Проверьте подключение микрофона.';
+        } else if (error.name === 'NotReadableError') {
+            errorMessage = 'Микрофон занят другим приложением. Закройте другие программы, использующие микрофон.';
+        }
+        
+        showNotification(errorMessage, 'error');
     }
 }
 
@@ -227,9 +472,17 @@ function leaveVoiceChat() {
         localStream = null;
     }
     
+    // Останавливаем детектор голосовой активности
+    stopVoiceActivityDetection();
+    
     // Закрываем все peer соединения
-    peerConnections.forEach(pc => pc.close());
-    peerConnections.clear();
+    if (peer) {
+        peer.destroy();
+        peer = null;
+    }
+    
+    // Удаляем все аудио элементы
+    document.querySelectorAll('.remote-audio').forEach(audio => audio.remove());
     
     socket.emit('leave-voice');
     isInVoiceChat = false;
@@ -240,146 +493,6 @@ function leaveVoiceChat() {
     document.getElementById('voiceChatSidebar').style.display = 'none';
     
     showNotification('🎤 Вы вышли из голосового чата', 'warning');
-}
-
-// Инициализация WebRTC соединений
-async function initializeVoiceConnections() {
-    // Получаем список пользователей в голосовом чате
-    const voiceUsersResponse = await fetch('/api/online-users');
-    const voiceUsers = await voiceUsersResponse.json();
-    
-    // Создаем соединения с каждым пользователем
-    voiceUsers.forEach(user => {
-        if (user.id !== currentUser.id) {
-            createPeerConnection(user.id);
-        }
-    });
-}
-
-// Создание WebRTC соединения
-async function createPeerConnection(targetUserId) {
-    try {
-        const peerConnection = new RTCPeerConnection({
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' }
-            ]
-        });
-
-        // Добавляем локальный поток
-        localStream.getTracks().forEach(track => {
-            peerConnection.addTrack(track, localStream);
-        });
-
-        // Обработчик входящих потоков
-        peerConnection.ontrack = (event) => {
-            console.log('🎧 Получен удаленный аудиопоток');
-            const audio = document.createElement('audio');
-            audio.srcObject = event.streams[0];
-            audio.autoplay = true;
-            audio.controls = false;
-            audio.className = 'remote-audio';
-            document.body.appendChild(audio);
-        };
-
-        // Генерация ICE кандидатов
-        peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                socket.emit('webrtc-ice-candidate', {
-                    to: targetUserId,
-                    candidate: event.candidate
-                });
-            }
-        };
-
-        // Создаем предложение
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-
-        // Отправляем предложение
-        socket.emit('webrtc-offer', {
-            to: targetUserId,
-            offer: offer
-        });
-
-        peerConnections.set(targetUserId, peerConnection);
-        
-    } catch (error) {
-        console.error('❌ Ошибка создания WebRTC соединения:', error);
-    }
-}
-
-// Обработка входящего WebRTC предложения
-async function handleWebRTCOffer(offer, fromSocketId, fromUserId) {
-    try {
-        const peerConnection = new RTCPeerConnection({
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ]
-        });
-
-        // Добавляем локальный поток
-        localStream.getTracks().forEach(track => {
-            peerConnection.addTrack(track, localStream);
-        });
-
-        // Обработчик входящих потоков
-        peerConnection.ontrack = (event) => {
-            console.log('🎧 Получен удаленный аудиопоток');
-            const audio = document.createElement('audio');
-            audio.srcObject = event.streams[0];
-            audio.autoplay = true;
-            audio.controls = false;
-            audio.className = 'remote-audio';
-            document.body.appendChild(audio);
-        };
-
-        // Генерация ICE кандидатов
-        peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                socket.emit('webrtc-ice-candidate', {
-                    to: fromUserId,
-                    candidate: event.candidate
-                });
-            }
-        };
-
-        // Устанавливаем удаленное описание
-        await peerConnection.setRemoteDescription(offer);
-
-        // Создаем ответ
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-
-        // Отправляем ответ
-        socket.emit('webrtc-answer', {
-            to: fromUserId,
-            answer: answer
-        });
-
-        peerConnections.set(fromUserId, peerConnection);
-        
-    } catch (error) {
-        console.error('❌ Ошибка обработки WebRTC предложения:', error);
-    }
-}
-
-// Обработка WebRTC ответа
-async function handleWebRTCAnswer(answer, fromSocketId, fromUserId) {
-    const peerConnection = peerConnections.get(fromUserId);
-    if (peerConnection) {
-        await peerConnection.setRemoteDescription(answer);
-    }
-}
-
-// Обработка ICE кандидата
-async function handleICECandidate(candidate, fromSocketId, fromUserId) {
-    const peerConnection = peerConnections.get(fromUserId);
-    if (peerConnection) {
-        await peerConnection.addIceCandidate(candidate);
-    }
 }
 
 // Переключение видимости голосового чата
@@ -481,7 +594,36 @@ function updateVoiceUsersList(users) {
             <img class="voice-user-avatar" src="${user.avatar}" alt="${user.username}">
             <div class="voice-user-info">
                 <div class="voice-user-name">${user.username}</div>
-                <div class="voice-user-status">🎤 Говорит</div>
+                <div class="voice-user-status">🎤 В голосовом чате</div>
+            </div>
+        `;
+        voiceUsersContainer.appendChild(userItem);
+    });
+}
+
+// Обновление списка говорящих пользователей
+function updateSpeakingUsersList(users) {
+    const voiceUsersContainer = document.getElementById('voiceUsers');
+    
+    if (users.length === 0) {
+        voiceUsersContainer.innerHTML = `
+            <div class="no-users">
+                <i class="fas fa-microphone-slash"></i>
+                <p>Никого нет в голосовом чате</p>
+            </div>
+        `;
+        return;
+    }
+    
+    voiceUsersContainer.innerHTML = '';
+    users.forEach(user => {
+        const userItem = document.createElement('div');
+        userItem.className = 'voice-user-item';
+        userItem.innerHTML = `
+            <img class="voice-user-avatar" src="${user.avatar}" alt="${user.username}">
+            <div class="voice-user-info">
+                <div class="voice-user-name">${user.username}</div>
+                <div class="voice-user-status speaking">🎤 Говорит</div>
             </div>
         `;
         voiceUsersContainer.appendChild(userItem);
@@ -539,8 +681,8 @@ socket.on('message-history', (messages) => {
     
     if (messages.length === 0) {
         container.innerHTML = `
-            <div class="welcome-message">
-                <i class="fas fa-comments"></i>
+            <div class='welcome-message'>
+                <i class='fas fa-comments'></i>
                 <h3>Начните общение в этом канале!</h3>
                 <p>Отправьте первое сообщение</p>
             </div>
@@ -609,20 +751,17 @@ socket.on('voice-users-update', (users) => {
     updateVoiceUsersList(users);
 });
 
+socket.on('speaking-users-update', (users) => {
+    console.log('🎤 Говорящие пользователи:', users);
+    updateSpeakingUsersList(users);
+});
+
 // WebRTC события
-socket.on('webrtc-offer', async (data) => {
-    console.log('📞 Получено WebRTC предложение от:', data.fromUserId);
-    await handleWebRTCOffer(data.offer, data.from, data.fromUserId);
-});
-
-socket.on('webrtc-answer', async (data) => {
-    console.log('📞 Получен WebRTC ответ от:', data.fromUserId);
-    await handleWebRTCAnswer(data.answer, data.from, data.fromUserId);
-});
-
-socket.on('webrtc-ice-candidate', async (data) => {
-    console.log('📞 Получен ICE кандидат от:', data.fromUserId);
-    await handleICECandidate(data.candidate, data.from, data.fromUserId);
+socket.on('user-peer-id', (data) => {
+    console.log('👤 Пользователь подключился с PeerID:', data.peerId);
+    if (isInVoiceChat && data.userId !== currentUser.id) {
+        callUser(data.peerId);
+    }
 });
 
 socket.on('connect', () => {
@@ -649,10 +788,20 @@ document.getElementById('messageInput').addEventListener('keypress', (e) => {
 });
 
 // Инициализация при загрузке
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // Запрос разрешения на уведомления
     if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
+    }
+    
+    // Проверяем микрофоны
+    const hasMicrophone = await checkMicrophoneAvailability();
+    if (!hasMicrophone) {
+        const joinBtn = document.getElementById('joinVoiceBtn');
+        if (joinBtn) {
+            joinBtn.disabled = true;
+            joinBtn.innerHTML = '<i class="fas fa-microphone-slash"></i> Микрофон не найден';
+        }
     }
     
     // Запрос разрешения на микрофон заранее

@@ -111,6 +111,9 @@
                         <button class="btn-voice leave" id="leaveVoiceBtn" onclick="leaveVoiceChat()" style="display: none;">
                             <i class="fas fa-phone-slash"></i> Покинуть голосовой чат
                         </button>
+                        <button class="btn-voice debug" onclick="toggleDebugMode()">
+                            <i class="fas fa-bug"></i> Отладка
+                        </button>
                     </div>
                 </div>
                 
@@ -159,6 +162,7 @@
     <div class="notifications" id="notifications"></div>
 
     <script src="/socket.io/socket.io.js"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script src="app.js"></script>
 
 </body>
